@@ -59,24 +59,43 @@ class DefaultAudioPlayerInteractions implements AudioPlayerInteractions {
 /// 
 /// This class provides convenient static methods for playing audio.
 /// You can customize the behavior by implementing [AudioPlayerInteractions]
-/// and setting it via [AudioHelper.setInteractions].
+/// and setting it via [AudioHelper.setInteractions] or [AudioHelper.initialize].
 class AudioHelper {
-  static AudioPlayerInteractions _interactions = DefaultAudioPlayerInteractions();
+  static AudioPlayerInteractions? _interactions;
+  static bool _initialized = false;
+  
+  /// Initialize with custom interactions implementation
+  /// 
+  /// This is a convenience method that sets interactions and marks as initialized.
+  /// You can call this once in your app's main() function.
+  static void initialize([AudioPlayerInteractions? interactions]) {
+    if (!_initialized) {
+      _interactions = interactions ?? DefaultAudioPlayerInteractions();
+      _initialized = true;
+    }
+  }
   
   /// Set custom interactions implementation
   static void setInteractions(AudioPlayerInteractions interactions) {
     _interactions = interactions;
+    _initialized = true;
   }
   
   /// Get current interactions implementation
-  static AudioPlayerInteractions get interactions => _interactions;
+  static AudioPlayerInteractions get interactions {
+    if (_interactions == null) {
+      _interactions = DefaultAudioPlayerInteractions();
+      _initialized = true;
+    }
+    return _interactions!;
+  }
 
   /// Open audio player with a single track
   static void playTrack(
     BuildContext context,
     AudioTrack track,
   ) {
-    _interactions.playTrack(context, track);
+    interactions.playTrack(context, track);
   }
 
   /// Open audio player with a playlist
@@ -85,7 +104,7 @@ class AudioHelper {
     List<AudioTrack> tracks, {
     int? startIndex,
   }) {
-    _interactions.playPlaylist(context, tracks, startIndex: startIndex);
+    interactions.playPlaylist(context, tracks, startIndex: startIndex);
   }
 
   /// Create an AudioTrack from a URL

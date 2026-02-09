@@ -91,11 +91,9 @@ lib/
 ### 4.1 Create `lib/audio_integration/player_adapters.dart`:
 
 ```dart
-import 'dart:io';
 import 'package:audio_player/audio_player.dart' as audio_player;
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import '../route_generator.dart'; // Adjust path to your route_generator
 
 /// Creates the audio player interactions implementation for the app.
 audio_player.AudioPlayerInteractions createAudioPlayerInteractions() {
@@ -109,29 +107,15 @@ class AppAudioPlayerInteractions implements audio_player.AudioPlayerInteractions
     required List<audio_player.AudioTrack> tracks,
     int? startIndex,
   }) {
-    final content = BlocProvider(
-      create: (context) => audio_player.AudioPlayerCubit(),
-      child: audio_player.AudioPlayerScreen(
-        tracks: tracks,
-        initialIndex: startIndex,
-      ),
+    // Use route_generator for consistent navigation
+    Navigator.pushNamed(
+      context,
+      '/audioPlayer',
+      arguments: {
+        'tracks': tracks,
+        'initialIndex': startIndex,
+      },
     );
-    if (Platform.isIOS) {
-      showCupertinoModalBottomSheet(
-        useRootNavigator: true,
-        context: context,
-        expand: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => content,
-      );
-    } else {
-      showMaterialModalBottomSheet(
-        context: context,
-        expand: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => content,
-      );
-    }
   }
 
   @override
@@ -158,96 +142,117 @@ library audio_adapter_factory;
 export 'player_adapters.dart';
 ```
 
-## Step 5: Create Audio Helper
+## Step 5: Add Route to Route Generator
 
-Create `lib/util/audio_helper.dart`:
+Add the `/audioPlayer` route to your `route_generator.dart`:
 
 ```dart
-import 'package:flutter/material.dart';
-import 'package:audio_player/audio_player.dart' as audio_player;
-import '../audio_integration/audio_adapter_factory.dart' as audio_adapters;
+import 'package:audio_player/audio_player.dart';
+import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-/// Helper functions for audio player operations
-class AudioHelper {
-  static bool _initialized = false;
-
-  /// Initialize the audio helper with app-specific interactions
-  static void initialize() {
-    if (!_initialized) {
-      audio_player.AudioHelper.setInteractions(audio_adapters.createAudioPlayerInteractions());
-      _initialized = true;
-    }
-  }
-
-  /// Open audio player with a single track
-  static void playTrack(
-    BuildContext context,
-    audio_player.AudioTrack track,
-  ) {
-    initialize();
-    audio_player.AudioHelper.playTrack(context, track);
-  }
-
-  /// Open audio player with a playlist
-  static void playPlaylist(
-    BuildContext context,
-    List<audio_player.AudioTrack> tracks, {
-    int? startIndex,
-  }) {
-    initialize();
-    audio_player.AudioHelper.playPlaylist(context, tracks, startIndex: startIndex);
-  }
-
-  /// Create an AudioTrack from a URL
-  static audio_player.AudioTrack createTrack({
-    required String id,
-    required String title,
-    required String url,
-    String? artist,
-    String? album,
-    String? artworkUrl,
-    Duration? duration,
-  }) {
-    return audio_player.AudioHelper.createTrack(
-      id: id,
-      title: title,
-      url: url,
-      artist: artist,
-      album: album,
-      artworkUrl: artworkUrl,
-      duration: duration,
+// In your RouteGenerator.generateRoute() method:
+case '/audioPlayer':
+  if (args != null) {
+    final List<AudioTrack> tracks = args['tracks'] as List<AudioTrack>;
+    final int? initialIndex = args['initialIndex'] as int?;
+    
+    // Show as modal bottom sheet
+    return MaterialPageRoute(
+      builder: (context) {
+        // Show bottom sheet immediately when route is pushed
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final content = BlocProvider(
+            create: (context) => AudioPlayerCubit(),
+            child: AudioPlayerScreen(
+              tracks: tracks,
+              initialIndex: initialIndex,
+            ),
+          );
+          
+          if (Platform.isIOS) {
+            showCupertinoModalBottomSheet(
+              useRootNavigator: true,
+              context: context,
+              expand: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => content,
+            ).then((_) {
+              if (context.mounted && Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            });
+          } else {
+            showMaterialModalBottomSheet(
+              context: context,
+              expand: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => content,
+            ).then((_) {
+              if (context.mounted && Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            });
+          }
+        });
+        
+        return const SizedBox.shrink();
+      },
+      fullscreenDialog: false,
     );
   }
-}
+  return _errorRoute();
 ```
 
+**Note**: Make sure your `MaterialApp` uses `onGenerateRoute: RouteGenerator.generateRoute`.
+
 ## Step 6: Initialize in main.dart
+
+### Option A: Use Package Directly (Recommended - No Wrapper Needed)
 
 Update your `lib/main.dart`:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'util/audio_helper.dart';
+import 'package:audio_player/audio_player.dart' as audio_player;
+import 'audio_integration/audio_adapter_factory.dart' as audio_adapters;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize audio helper with app-specific interactions
-  AudioHelper.initialize();
+  audio_player.AudioHelper.initialize(
+    audio_adapters.createAudioPlayerInteractions()
+  );
   
   runApp(MyApp());
 }
 ```
+
+Then use directly:
+```dart
+import 'package:audio_player/audio_player.dart' as audio_player;
+
+// Create track
+final track = audio_player.AudioHelper.createTrack(
+  id: '1', title: 'Song', url: 'https://...'
+);
+
+// Play track
+audio_player.AudioHelper.playTrack(context, track);
+```
+
+**No wrapper needed!** The package's `AudioHelper` is sufficient.
 
 ## Step 7: Use the Audio Player
 
 ### 7.1 Play a Single Track
 
 ```dart
-import 'package:your_app/util/audio_helper.dart';
+import 'package:audio_player/audio_player.dart' as audio_player;
 
 // Create a track
-final track = AudioHelper.createTrack(
+final track = audio_player.AudioHelper.createTrack(
   id: 'track1',
   title: 'My Song',
   url: 'https://example.com/song.mp3',
@@ -255,19 +260,20 @@ final track = AudioHelper.createTrack(
   artworkUrl: 'https://example.com/artwork.jpg',
 );
 
-// Play it
-AudioHelper.playTrack(context, track);
+// Play it (uses route_generator internally)
+audio_player.AudioHelper.playTrack(context, track);
 ```
 
 ### 7.2 Play a Playlist
 
 ```dart
 final tracks = [
-  AudioHelper.createTrack(id: '1', title: 'Song 1', url: 'https://...'),
-  AudioHelper.createTrack(id: '2', title: 'Song 2', url: 'https://...'),
+  audio_player.AudioHelper.createTrack(id: '1', title: 'Song 1', url: 'https://...'),
+  audio_player.AudioHelper.createTrack(id: '2', title: 'Song 2', url: 'https://...'),
 ];
 
-AudioHelper.playPlaylist(context, tracks, startIndex: 0);
+// Play playlist (uses route_generator internally)
+audio_player.AudioHelper.playPlaylist(context, tracks, startIndex: 0);
 ```
 
 ### 7.3 Add Mini Player Widget
@@ -311,9 +317,13 @@ await AudioServiceManager().initialize(
 );
 ```
 
-### Custom Interactions
+### Custom Navigation
 
-Modify `lib/audio_integration/player_adapters.dart` to customize how the player opens (e.g., full-screen route instead of bottom sheet).
+Modify `lib/audio_integration/player_adapters.dart` to customize how the player opens. Currently it uses `Navigator.pushNamed('/audioPlayer')` which shows as a bottom sheet via route_generator. You can change it to:
+
+- Full-screen route: `Navigator.pushNamed('/audioPlayer', ...)` and modify route_generator to return a full-screen route
+- Direct bottom sheet: Use `showCupertinoModalBottomSheet` or `showMaterialModalBottomSheet` directly
+- Custom navigation: Any navigation pattern you prefer
 
 ## Summary Checklist
 
@@ -322,8 +332,8 @@ Modify `lib/audio_integration/player_adapters.dart` to customize how the player 
 - [ ] Added Android notification icon (`ic_notification.xml`)
 - [ ] Added iOS background mode (`UIBackgroundModes` → `audio`)
 - [ ] Created `audio_integration` folder with adapters
-- [ ] Created `audio_helper.dart`
-- [ ] Initialized in `main.dart`
+- [ ] Added `/audioPlayer` route to `route_generator.dart`
+- [ ] Initialized in `main.dart` (with interactions)
 - [ ] Tested playing a track
 
 ## Troubleshooting
@@ -345,6 +355,7 @@ Modify `lib/audio_integration/player_adapters.dart` to customize how the player 
 ## Example: Complete Integration
 
 See the `z_platform` app for a complete working example:
-- Integration: `lib/audio_integration/`
-- Helper: `lib/util/audio_helper.dart`
+- Integration: `lib/audio_integration/player_adapters.dart`
+- Route: `lib/route_generator.dart` (see `/audioPlayer` case)
 - Usage: `lib/screen/library/library_screen.dart`
+- Initialization: `lib/main.dart`
