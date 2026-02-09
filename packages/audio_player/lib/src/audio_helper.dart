@@ -39,6 +39,20 @@ class DefaultAudioPlayerInteractions implements AudioPlayerInteractions {
       );
     }
   }
+
+  @override
+  void playTrack(BuildContext context, AudioTrack track) {
+    openPlayer(context, tracks: [track]);
+  }
+
+  @override
+  void playPlaylist(
+    BuildContext context,
+    List<AudioTrack> tracks, {
+    int? startIndex,
+  }) {
+    openPlayer(context, tracks: tracks, startIndex: startIndex);
+  }
 }
 
 /// Helper functions for audio player operations
